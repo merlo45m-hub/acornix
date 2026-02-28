@@ -15,18 +15,14 @@ PORT = 8081
 current_file_path = ""
 current_file_content = ""
 
-class StudioHandler(http.server.SimpleHTTPRequestHandler):
+# ── CAMBIO CLAVE: BaseHTTPRequestHandler en lugar de SimpleHTTPRequestHandler
+# SimpleHTTPRequestHandler sirve archivos estáticos y puede interferir con POST.
+class StudioHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
-        pass # Evita que se llene la terminal de logs
+        pass
 
     def do_GET(self):
-        global current_file_content
-        if self.path == '/' or self.path == '/index.html':
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/html; charset=utf-8')
-            self.end_headers()
-            
-            # Interfaz gráfica del editor en HTML
+        if self.path in ('/', '/index.html'):
             html_template = """<!DOCTYPE html>
 <html>
 <head>
@@ -38,67 +34,115 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
     .toolbar { padding: 12px; background: #2d2d2d; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; border-bottom: 3px solid #007aff; }
     button { padding: 12px 16px; border-radius: 8px; border: none; color: white; font-size: 15px; cursor: pointer; font-weight: bold; transition: transform 0.1s; display: flex; align-items: center; gap: 6px; }
     button:active { transform: scale(0.95); }
-    .btn-copy { background: #34c759; }
-    .btn-save { background: #007aff; }
+    .btn-copy   { background: #34c759; }
+    .btn-select { background: #636366; }
+    .btn-delete { background: #ff453a; }
+    .btn-save   { background: #007aff; }
     #editor { flex: 1; width: 100%; box-sizing: border-box; background: #1e1e1e; color: #d4d4d4; font-family: monospace; font-size: 14px; border: none; padding: 15px; resize: none; outline: none; }
     .info-text { font-size: 12px; color: #aaa; margin-top: 5px; text-align: center; padding: 0 10px; }
+    #status { font-size: 13px; padding: 4px 10px; border-radius: 6px; display: none; }
+    #status.ok  { background: #1a3a1a; color: #34c759; display: inline-block; }
+    #status.err { background: #3a1a1a; color: #ff453a; display: inline-block; }
   </style>
 </head>
 <body>
   <div class="toolbar">
     <div style="font-weight: bold; font-size: 18px; margin-right: 5px;">🤖 AI Studio</div>
-    <button class="btn-copy" onclick="copyCode()">📋 Copy for AI</button>
+    <button class="btn-copy"   onclick="copyCode()">📋 Copy for AI</button>
+    <button class="btn-select" onclick="selectAll()">☑️ Select All</button>
+    <button class="btn-delete" onclick="deleteAll()">🗑️ Delete All</button>
+    <span id="status"></span>
     <div style="flex:1"></div>
     <button class="btn-save" onclick="saveCode()">💾 Save & Apply</button>
   </div>
-  <div class="info-text">1. Copy code -> 2. Paste in ChatGPT -> 3. Paste answer here -> 4. Save</div>
+  <div class="info-text">1. Copy code → 2. Paste in ChatGPT → 3. Paste answer here → 4. Save</div>
   <textarea id="editor" spellcheck="false" autocapitalize="none" autocorrect="off">CONTENT_PLACEHOLDER</textarea>
   
   <script>
+    function selectAll() {
+      const ed = document.getElementById('editor');
+      ed.focus();
+      ed.select();
+    }
+
+    function deleteAll() {
+      if (confirm('¿Borrar todo el contenido del editor?')) {
+        document.getElementById('editor').value = '';
+      }
+    }
+
     function copyCode() {
       const ed = document.getElementById('editor');
       ed.select();
       document.execCommand('copy');
-      alert("✅ Copied to clipboard!\n\nPaste it into your favorite AI (ChatGPT, Gemini, Claude...), tell it what you want it to do at the [ WRITE YOUR IDEA HERE ] line, and then paste the returned code right here.");
+      alert("✅ Copied!\\n\\nPaste into ChatGPT, Gemini or Claude, describe what you want, then paste the result back here.");
     }
     
     async function saveCode() {
+      const status = document.getElementById('status');
       const code = document.getElementById('editor').value;
-      const res = await fetch('/save', {
-        method: 'POST', body: code
-      });
-      if(res.ok) {
-        alert("💾 File saved successfully!\n\nYou can now close this window, return to Acornix (Termux), and press ENTER to test your creation.");
-      } else {
-        alert("❌ Error saving file.");
+
+      status.className = '';
+      status.textContent = '⏳ Guardando...';
+      status.style.display = 'inline-block';
+
+      try {
+        const res = await fetch('/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          body: code
+        });
+
+        if (res.ok) {
+          status.className = 'ok';
+          status.textContent = '✅ Guardado';
+          setTimeout(() => { status.style.display = 'none'; }, 3000);
+        } else {
+          const msg = await res.text();
+          status.className = 'err';
+          status.textContent = '❌ Error: ' + msg;
+        }
+      } catch(e) {
+        status.className = 'err';
+        status.textContent = '❌ Sin conexión';
       }
     }
   </script>
 </body>
 </html>"""
-            # Inyectar el código de forma segura para no romper el HTML
-            final_html = html_template.replace("CONTENT_PLACEHOLDER", html.escape(current_file_content))
-            self.wfile.write(final_html.encode('utf-8'))
-            return
-        
-        self.send_error(404)
+            body = html_template.replace("CONTENT_PLACEHOLDER", html.escape(current_file_content))
+            body = body.encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.send_error(404)
 
     def do_POST(self):
         global current_file_path
         if self.path == '/save':
-            content_length = int(self.headers.get('Content-Length', 0))
-            new_code = self.rfile.read(content_length).decode('utf-8')
+            length = int(self.headers.get('Content-Length', 0))
+            new_code = self.rfile.read(length).decode('utf-8')
             try:
                 with open(current_file_path, "w", encoding="utf-8") as f:
                     f.write(new_code)
                 self.send_response(200)
+                self.send_header('Content-Type', 'text/plain')
+                self.send_header('Content-Length', '2')
                 self.end_headers()
                 self.wfile.write(b"OK")
             except Exception as e:
+                msg = str(e).encode('utf-8')
                 self.send_response(500)
+                self.send_header('Content-Type', 'text/plain')
+                self.send_header('Content-Length', str(len(msg)))
                 self.end_headers()
-                self.wfile.write(str(e).encode('utf-8'))
-            return
+                self.wfile.write(msg)
+        else:
+            self.send_error(404)
+
 
 def run():
     global current_file_path, current_file_content
@@ -118,12 +162,10 @@ def run():
         name = input("\n📝 Enter project name (e.g. calculator): ").strip()
         if not name: continue
 
-        # Limpiar el nombre para carpetas/archivos
         clean_name = "".join(e for e in name if e.isalnum() or e == " ").strip().replace(" ", "_").lower()
         if not clean_name: clean_name = "untitled"
 
         if choice == "1":
-            # --- MODO WEBAPP ---
             target_dir = os.path.join("my_apps", clean_name)
             os.makedirs(target_dir, exist_ok=True)
             current_file_path = os.path.join(target_dir, "index.html")
@@ -154,7 +196,6 @@ def run():
 </html>"""
 
         elif choice == "2":
-            # --- MODO PLUGIN PYTHON ---
             target_dir = os.path.join("plugins", clean_name)
             os.makedirs(target_dir, exist_ok=True)
             current_file_path = os.path.join(target_dir, "main.py")
@@ -195,7 +236,6 @@ def run():
 if __name__ == "__main__":
     run()"""
 
-        # Si el archivo ya existía, carga el código existente, si no, escribe la plantilla
         if os.path.exists(current_file_path):
             with open(current_file_path, "r", encoding="utf-8") as f:
                 current_file_content = f.read()
@@ -209,7 +249,6 @@ if __name__ == "__main__":
         print(f"\n✅ Template generated at: {current_file_path}")
         print("🌐 Starting visual editor on port 8081...")
 
-        # Iniciar servidor local
         socketserver.ThreadingTCPServer.allow_reuse_address = True
         httpd = socketserver.ThreadingTCPServer(("", PORT), StudioHandler)
         server_thread = threading.Thread(target=httpd.serve_forever, daemon=True)
@@ -226,8 +265,6 @@ if __name__ == "__main__":
         
         print("Shutting down editor...")
         httpd.shutdown()
-        
-        # Después de salir vuelve al menú principal del plugin, o a Acornix
         break
 
 if __name__ == "__main__":
