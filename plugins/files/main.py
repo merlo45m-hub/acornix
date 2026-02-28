@@ -7,7 +7,7 @@ import shutil
 from urllib.parse import urlparse, parse_qs, unquote
 
 # Acornix Plugin Configuration
-config = {"label": "FILES", "icon": "📱"}
+config = {"label": "FILES (edit your apps, plugins)", "icon": "📱"}
 PORT = 8083
 
 def get_safe_path(base, rel_path):
