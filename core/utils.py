@@ -13,13 +13,13 @@ load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
 
 def is_server_active():
-    """Check if the local server is running on port 8080."""
+    """Check local server running on port 8080."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', 8080)) == 0
 
 def ask_ai(prompt, system_prompt):
     """
-    Sends a prompt to the configured AI provider and returns the response.
+    Sends prompt to configured provider and returns response.
     """
     config_file = "config.json"
     if not os.path.exists(config_file):
@@ -32,8 +32,10 @@ def ask_ai(prompt, system_prompt):
     provider = settings.get("active_provider", "openai")
     api_key = settings.get("api_keys", {}).get(provider)
     model = settings.get("models", {}).get(provider)
-    
-    if not api_key or not model:
+
+    # Local/Ollama providers don't need API keys
+    no_key_needed = provider in ("local", "ollama")
+    if (not model) or ((not api_key) and not no_key_needed):
         print(f"\n❌ Error: Missing configuration for {provider}")
         return None
 
@@ -76,9 +78,35 @@ def ask_ai(prompt, system_prompt):
             print(f"❌ Anthropic API Error: {e}")
             return None
 
+    # --- Local Provider (HuggingFace, offline) ---
+    elif provider == "local":
+        try:
+            return ask_local(prompt, system_prompt, model)
+        except Exception as e:
+            print(f"❌ Local AI Error: {e}")
+            return None
+
+    # --- Ollama Provider (local server) ---
+    elif provider == "ollama":
+        url = "http://localhost:11434/v1/chat/completions"
+        headers = {"Content-Type": "application/json"}
+        data = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ]
+        }
+        try:
+            res = requests.post(url, headers=headers, json=data, timeout=120).json()
+            return res["choices"][0]["message"]["content"]
+        except Exception as e:
+            print(f"❌ Ollama API Error: {e}")
+            return None
+
 def process_and_execute(ai_text, filename="generated_app.html"):
     """
-    Handles AI output, saves files in project folders, and manages server status.
+    Handles output, saves files to project folders, manages server status.
     """
     if not ai_text or "---CODIGO---" not in ai_text:
         print("⚠️ No valid code block found in AI response.")
@@ -92,61 +120,32 @@ def process_and_execute(ai_text, filename="generated_app.html"):
     if not os.path.exists(project_path):
         os.makedirs(project_path)
 
-    # 2. Parsing AI Response
+    # 2. Parsing Response
     parts = ai_text.split("---SUGERENCIA---")
     code_block = parts[0].replace("---CODIGO---", "").strip()
-    # Remove markdown formatting if present
-    code_block = code_block.replace("```python", "").replace("```html", "").replace("```", "").strip()
-    suggestion = parts[1].strip() if len(parts) > 1 else ""
 
-    # 3. Handling Web Content (HTML)
-    if "<html" in code_block.lower() or "<!doctype" in code_block.lower():
+    # 3. Determine file type
+    if ".html" in filename or "html" in code_block[:200].lower():
         file_path = os.path.join(project_path, "index.html")
-        
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(code_block)
-        print(f"\n✅ Project saved in: {file_path}")
+    elif ".py" in filename or "python" in code_block[:200].lower():
+        file_path = os.path.join(project_path, "main.py")
+    else:
+        file_path = os.path.join(project_path, "index.html")
 
-        # Server Management
-        if not is_server_active():
-            print(f"\n🤖 [ASSISTANT]: Local server is currently OFF.")
-            if input(f"👉 Would you like to start it? (y/n): ").lower() == 'y':
-                print("📡 Starting server in background (Port 8080)...")
-                subprocess.Popen(["python", "-m", "http.server", "8080"], 
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                time.sleep(1)
-        
-        # Open in Browser (Android/Termux)
+    # 4. Save the file
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(code_block)
+    print(f"✅ Saved to {file_path}")
+
+    # 5. Start server if needed
+    if not is_server_active() and file_path.endswith(".html"):
+        print("📡 Starting server in background (Port 8080)...")
+        subprocess.Popen(
+            ["python", "-m", "http.server", "8080"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        time.sleep(1)
         url = f"http://localhost:8080/{base_folder}/{project_name}/index.html"
         print(f"🌍 Opening: {url}")
         os.system(f'termux-open-url "{url}"')
-        
-    # 4. Handling Logic Content (Python)
-    else:
-        file_path = os.path.join(project_path, "main.py")
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(code_block)
-        print(f"\n🚀 Executing script at: {file_path}")
-        subprocess.run([sys.executable, file_path])
-
-    # 5. Iterative Improvement Loop
-    if suggestion:
-        print(f"\n🤖 [ASSISTANT SUGGESTS]: {suggestion}")
-        print("💡 (Type 'y' to accept, 'n' to exit, or type your OWN IMPROVEMENT directly)")
-        
-        user_input = input("👉 Your choice: ").strip()
-        if user_input.lower() == 'n' or not user_input:
-            print("👍 Returning to menu.")
-            return
-
-        improvement = suggestion if user_input.lower() == 'y' else user_input
-        print(f"\n🧠 Applying: '{improvement}'...")
-
-        improvement_prompt = (
-            f"Current code:\n\n{code_block}\n\n"
-            f"Requested change: {improvement}. "
-            f"Return the full updated code within ---CODIGO--- and a new ---SUGERENCIA---."
-        )
-        
-        new_res = ask_ai(improvement_prompt, "You are an expert developer. Return ONLY ---CODIGO--- and ---SUGERENCIA---.")
-        process_and_execute(new_res, filename)
