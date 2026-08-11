@@ -6,6 +6,7 @@ import subprocess
 import socket
 import time
 from dotenv import load_dotenv
+from core.local_ai import ask_local
 
 # API Configuration
 load_dotenv()
