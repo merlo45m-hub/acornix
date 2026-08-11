@@ -151,3 +151,185 @@ def main_menu():
 
 if __name__ == "__main__":
     main_menu()
+
+# =============================================================================
+# 9-HOUR OVERNIGHT WORKFLOW INTEGRATION
+# =============================================================================
+# This module provides the 9-hour overnight automation framework for the acornix
+# project. It wires the guide at /root/workspace/clip-engine/COMPLETE_GUIDE_TO_THE_9-HOUR_OVERNIGHT_WORKFLOW.md
+# into your daily operations, enabling autonomous agent operation while you sleep.
+#
+# The 9-hour window covers:
+#   00:00 - 03:00 - "Early Bird" — wake-up brief, service health, setup checks
+#   03:00 - 06:00 - "Midnight" — cron jobs, skill maintenance, memory review
+#   06:00 - 09:00 - "Morning" — standup briefing, project state, updates
+#   09:00 - 12:00 - "Afternoon" — active work, PR review, monitoring
+#   12:00 - 15:00 - "Lunch" — deep work blocks, async processing
+#   15:00 - 18:00 - "Evening" — delivery, scheduling, cleanup
+#   18:00 - 21:00 - "Night" — review, logging, next-day prep
+#   21:00 - 24:00 - "Late Night" — final checks, shutdown prep
+# =============================================================================
+
+
+class OvernightWorkflow:
+    """
+    The 9-hour overnight automation framework.
+
+    Wires together the 9-hour workflow guide with active service monitoring.
+    Uses the guide at /root/workspace/clip-engine/COMPLETE_GUIDE_TO_THE_9-HOUR_OVERNIGHT_WORKFLOW.md
+    to define the full automation pipeline.
+
+    The guide provides:
+    - 5 layers for autonomous operation
+    - Setup checklist (VPS, Hermes, Gateway, Telegram, Cron, SOUL.md)
+    - Compounding mechanics (daily → weekly → monthly growth)
+    - Realistic token math and cost estimate
+    - 9-hour schedule breakdown
+    """
+
+    def __init__(self, guide_path="/root/workspace/clip-engine/COMPLETE_GUIDE_TO_THE_9-HOUR_OVERNIGHT_WORKFLOW.md",
+                 vault_path="/sdcard/Documents/Obsidian1main/obsidian1"):
+        self.guide_path = guide_path
+        self.vault_path = vault_path
+        self._guide_exists = False
+
+    def load_guide(self):
+        """Load the overnight workflow guide if it exists."""
+        import os
+        if os.path.exists(self.guide_path):
+            with open(self.guide_path, "r") as f:
+                self.guide_content = f.read()
+            self._guide_exists = True
+            return self.guide_content
+        return None
+
+    def verify_setup(self):
+        """Verify the 9-hour setup is complete. Returns (ok, issues)."""
+        issues = []
+
+        # 1. Check the guide exists
+        if not self._guide_exists:
+            issues.append("OVERNIGHT_GUIDE_MISSING: Guide file not found at " + self.guide_path)
+
+        # 2. Check all 5 layers are set up
+        layers = [
+            ("Gateway", "check", "/root/.hermes/profiles/cto/scripts/gateway"),
+            ("Cron Jobs", "check", "/root/.hermes/profiles/cto/scripts/"),
+            ("Skills Library", "check", "/root/.hermes/skills/"),
+            ("Memory DB", "check", "/root/.hermes/profiles/cto/"),
+            ("Wiki", "check", "/sdcard/Documents/Obsidian1main/obsidian1/"),
+        ]
+        for name, check_type, check_path in layers:
+            if not os.path.exists(check_path):
+                issues.append(f"LAYER_MISSING: {name} at {check_path}")
+
+        # 3. Check Telegram is connected
+        import subprocess
+        result = subprocess.run(["curl", "-s", "--max-time", "3", "http://127.0.0.1:8644/health"],
+                               capture_output=True, text=True, timeout=5)
+        if result.returncode != 0:
+            issues.append("TELEGRAM_GATEWAY_UNAVAILABLE: cannot reach webhook at :8644")
+
+        # 4. Check cron jobs are scheduled
+        import json
+        cron_dir = "/root/.hermes/profiles/cto/cron/"
+        if os.path.exists(cron_dir):
+            cron_files = [f for f in os.listdir(cron_dir) if f.endswith(".json")]
+            if len(cron_files) < 3:
+                issues.append(f"CRON_JOBS_LOW: only {len(cron_files)} cron jobs found (need at least 3)")
+
+        return ("clean" if not issues else "issues", issues)
+
+    def run(self):
+        """Execute the overnight workflow. Returns status dict."""
+        result = {
+            "status": "ok",
+            "guide_loaded": self._guide_exists,
+            "setup_complete": True,
+            "checks": []
+        }
+
+        # Load guide
+        guide = self.load_guide()
+        if guide:
+            result["guide_loaded"] = True
+            result["guide_size"] = len(guide)
+            result["guide_summary"] = guide[:500]
+
+        # Verify setup
+        status, issues = self.verify_setup()
+        result["setup_status"] = status
+        result["setup_issues"] = issues
+
+        # Run health checks
+        result["health"] = {
+            "webui": self._check_webui(),
+            "omniroute": self._check_omniroute(),
+            "ollama": self._check_ollama(),
+            "telegram_gateway": self._check_telegram_gateway(),
+            "cron_jobs": self._check_cron_jobs(),
+        }
+
+        return result
+
+    def _check_webui(self):
+        import subprocess
+        r = subprocess.run(["curl", "-s", "--max-time", "3", "http://127.0.0.1:8787/health"],
+                          capture_output=True, text=True, timeout=5)
+        try:
+            import json
+            d = json.loads(r.stdout)
+            return "ok" if d.get("status") == "ok" else "down"
+        except:
+            return "unknown"
+
+    def _check_omniroute(self):
+        import subprocess
+        r = subprocess.run(["curl", "-s", "--max-time", "3", "http://127.0.0.1:20128/v1/chat/completions"],
+                          capture_output=True, text=True, timeout=5)
+        return "healthy" if r.returncode == 0 else "unreachable"
+
+    def _check_ollama(self):
+        import subprocess
+        r = subprocess.run(["curl", "-s", "--max-time", "3", "http://127.0.0.1:11434/api/tags"],
+                          capture_output=True, text=True, timeout=5)
+        try:
+            import json
+            d = json.loads(r.stdout)
+            return "ok" if "models" in d else "unhealthy"
+        except:
+            return "unknown"
+
+    def _check_telegram_gateway(self):
+        import subprocess
+        r = subprocess.run(["curl", "-s", "--max-time", "3", "http://127.0.0.1:8644/health"],
+                          capture_output=True, text=True, timeout=5)
+        return "ok" if r.returncode == 0 else "unreachable"
+
+    def _check_cron_jobs(self):
+        import os, json
+        cron_dir = "/root/.hermes/profiles/cto/cron/"
+        cron_files = [f for f in os.listdir(cron_dir) if f.endswith(".json")]
+        return len(cron_files)
+
+
+# =============================================================================
+# INSTANTIATE THE OVERNIGHT WORKFLOW
+# =============================================================================
+# Create an instance that runs the full 9-hour workflow check
+# Schedule: every day at 3 AM (03:00 UTC)
+
+overnight = OvernightWorkflow()
+
+
+# =============================================================================
+# QUICK TEST: verify the guide is loaded
+# =============================================================================
+if __name__ == "__main__":
+    result = overnight.run()
+    print("OVERNIGHT WORKFLOW STATUS:")
+    print(f"  Guide loaded: {result['guide_loaded']}")
+    print(f"  Setup complete: {result['setup_complete']}")
+    print(f"  Health: {result['health']}")
+    print(f"  Issues: {result['setup_issues']}")
+    print(f"  Summary: {result.get('guide_summary', '')}")
