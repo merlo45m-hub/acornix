@@ -17,6 +17,29 @@ def is_server_active():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', 8080)) == 0
 
+def normalize_ai_output(text):
+    """
+    Converts standard markdown code blocks into the ---CODIGO--- contract
+    that process_and_execute() expects. Falls back to raw text if no
+    fenced code block is found.
+    """
+    if not text:
+        return text
+    if "---CODIGO---" in text:
+        return text
+    if "```" in text:
+        parts = text.split("```")
+        # parts[0] = prose before, parts[1] = code (may have language tag), parts[2] = rest
+        code = parts[1]
+        # Strip language tag like "python" or "html" on first line
+        code_lines = code.split("\n")
+        if code_lines and code_lines[0].strip() and not code_lines[0].strip().startswith(("<", "import", "def", "class", "from", "#!/")):
+            code_lines = code_lines[1:]
+        code = "\n".join(code_lines).strip()
+        suggestion = parts[2].strip() if len(parts) > 2 else ""
+        return f"---CODIGO---\n{code}\n---SUGERENCIA---\n{suggestion}"
+    return f"---CODIGO---\n{text}\n---SUGERENCIA---"
+
 def ask_ai(prompt, system_prompt):
     """
     Sends prompt to configured provider and returns response.
@@ -81,7 +104,7 @@ def ask_ai(prompt, system_prompt):
     # --- Local Provider (HuggingFace, offline) ---
     elif provider == "local":
         try:
-            return ask_local(prompt, system_prompt, model)
+            return normalize_ai_output(ask_local(prompt, system_prompt, model))
         except Exception as e:
             print(f"❌ Local AI Error: {e}")
             return None
@@ -99,7 +122,7 @@ def ask_ai(prompt, system_prompt):
         }
         try:
             res = requests.post(url, headers=headers, json=data, timeout=120).json()
-            return res["choices"][0]["message"]["content"]
+            return normalize_ai_output(res["choices"][0]["message"]["content"])
         except Exception as e:
             print(f"❌ Ollama API Error: {e}")
             return None
