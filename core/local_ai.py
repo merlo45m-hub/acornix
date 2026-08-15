@@ -3,25 +3,39 @@
 Local AI provider for acornix — uses Ollama or HuggingFace models.
 Drop-in replacement for ask_ai() that works offline.
 """
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+# Lazy imports — torch/transformers are heavy and only needed for HuggingFace local mode.
+# Ollama (the default provider) doesn't need them at all.
+_torch = None
+_transformers = None
 
 # Global model cache (load once, reuse)
 _model = None
 _tokenizer = None
 _model_name = None
 
+def _ensure_torch():
+    """Import torch/transformers lazily so plugins don't crash on import."""
+    global _torch, _transformers
+    if _torch is not None:
+        return
+    import torch as _t
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    _torch = _t
+    _transformers = (AutoModelForCausalLM, AutoTokenizer)
+
 def load_model(model_name="Qwen/Qwen2.5-Coder-0.5B-Instruct"):
     """Load model once and cache it."""
     global _model, _tokenizer, _model_name
     if _model_name == model_name and _model is not None:
         return _model, _tokenizer
-    
+
+    _ensure_torch()
+    AutoModelForCausalLM, AutoTokenizer = _transformers
     print(f"Loading {model_name}...")
     _tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     _model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=torch.float32,
+        torch_dtype=_torch.float32,
         device_map=None,
         trust_remote_code=True,
     )
@@ -54,7 +68,7 @@ def ask_local(prompt, system_prompt="", model_name="Qwen/Qwen2.5-Coder-0.5B-Inst
     inputs = tokenizer(text, return_tensors="pt")
     
     # Generate
-    with torch.no_grad():
+    with _torch.no_grad():
         outputs = model.generate(
             **inputs,
             max_new_tokens=512,

@@ -2,11 +2,12 @@ import os
 import zipfile
 import http.server
 import socketserver
-import cgi
 import json
 import threading
 import shutil
 from urllib.parse import urlparse, parse_qs
+from email.parser import BytesParser
+from email.policy import default as default_policy
 
 # Configuration for the main menu
 config = {"label": "Smart Import-Export Hub", "icon": "📦"}
@@ -109,22 +110,66 @@ class ManagementHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path == '/import':
             try:
-                form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ={'REQUEST_METHOD': 'POST'})
-                
-                if 'file' not in form or not form['file'].filename:
-                    return self._send_alert("Please select a file.", is_error=True)
+                # Parse multipart form data without cgi module (removed in Python 3.13+)
+                content_length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(content_length)
+                ct = self.headers.get('Content-Type', '')
+                filename = None
+                file_data = None
 
-                file_item = form['file']
-                filename = file_item.filename
+                if 'multipart/form-data' in ct:
+                    # Extract boundary from Content-Type header
+                    boundary = None
+                    for part in ct.split(';'):
+                        part = part.strip()
+                        if part.startswith('boundary='):
+                            boundary = part[len('boundary='):].strip('"')
+                            break
+
+                    if boundary:
+                        # Parse multipart body manually
+                        boundary_bytes = ('--' + boundary).encode()
+                        parts = body.split(boundary_bytes)
+                        for part in parts:
+                            if not part or part == b'--' or part == b'--\r\n' or part.strip() == b'--':
+                                continue
+                            # Strip leading \r\n
+                            if part.startswith(b'\r\n'):
+                                part = part[2:]
+                            # Find header/body separator
+                            header_end = part.find(b'\r\n\r\n')
+                            if header_end == -1:
+                                continue
+                            header_text = part[:header_end].decode('utf-8', errors='ignore')
+                            file_body = part[header_end + 4:]
+                            # Strip trailing \r\n
+                            if file_body.endswith(b'\r\n'):
+                                file_body = file_body[:-2]
+
+                            # Extract filename from Content-Disposition
+                            if 'filename=' in header_text:
+                                for h in header_text.split('\r\n'):
+                                    if 'filename=' in h:
+                                        fn_start = h.find('filename="')
+                                        if fn_start != -1:
+                                            fn_end = h.find('"', fn_start + 10)
+                                            filename = h[fn_start + 10:fn_end]
+                                        break
+                                if filename:
+                                    file_data = file_body
+                                    break
+
+                if not filename or file_data is None:
+                    return self._send_alert("Please select a file.", is_error=True)
 
                 if not filename.lower().endswith('.zip'):
                     return self._send_alert(f"File '{filename}' is not a ZIP archive.", is_error=True)
 
-                # Save file to temporary import folder
+                # Save uploaded file
                 os.makedirs("temp_imports", exist_ok=True)
                 temp_zip = os.path.join("temp_imports", filename)
                 with open(temp_zip, 'wb') as f:
-                    f.write(file_item.file.read())
+                    f.write(file_data)
 
                 # Smart Auto-Detection of content type
                 target_folder, error_msg = detect_and_validate_zip(temp_zip)
