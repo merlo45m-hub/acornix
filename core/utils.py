@@ -58,8 +58,23 @@ def ask_ai(prompt, system_prompt):
 
     # Local/Ollama providers don't need API keys
     no_key_needed = provider in ("local", "ollama")
+
+    # --- FAILURE RECOVERY ---
+    # Mission promise: build apps with NO API key. If a cloud provider was
+    # selected but has no key configured, transparently fall back to the local
+    # Ollama path instead of failing at the cloud call.
+    if (not no_key_needed) and (not api_key):
+        print(f"\n⚠️ No API key for cloud provider '{provider}'. "
+              f"Falling back to local Ollama (no key needed).")
+        provider = "ollama"
+        no_key_needed = True
+        model = model or settings.get("models", {}).get("ollama") or "qwen2.5-coder:1.5b"
+
     if (not model) or ((not api_key) and not no_key_needed):
-        print(f"\n❌ Error: Missing configuration for {provider}")
+        fallback = model or "qwen2.5-coder:1.5b"
+        print(f"\n❌ Error: Missing model/configuration for '{provider}'.\n"
+              f"   If using Ollama: ensure it's running (`ollama serve`) and pulled "
+              f"(`ollama pull {fallback}`).")
         return None
 
     # --- OpenAI Provider ---
@@ -124,7 +139,7 @@ def ask_ai(prompt, system_prompt):
             res = requests.post(url, headers=headers, json=data, timeout=120).json()
             return normalize_ai_output(res["choices"][0]["message"]["content"])
         except Exception as e:
-            print(f"❌ Ollama API Error: {e}")
+            print(f"❌ Ollama error: {e}. Is Ollama running at localhost:11434? Try: `ollama serve`")
             return None
 
 def process_and_execute(ai_text, filename="generated_app.html"):

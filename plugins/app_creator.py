@@ -77,7 +77,14 @@ def run():
             
             print(f"\n🧠 Programming '{name}' from scratch...")
             res = ask_ai(idea, sys_prompt)
-            
+
+            # Failure recovery: ask_ai returns None on any config/provider error.
+            # Don't hand a None into process_and_execute (it would mask the cause).
+            if not res:
+                print("\n⚠️ App generation failed — see error above. Nothing was saved.")
+                input("\nPress Enter to continue...")
+                continue
+
             # process_and_execute handles file generation and server checks
             process_and_execute(res, name)
             input("\nPress Enter to continue...")
