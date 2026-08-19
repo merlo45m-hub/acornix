@@ -37,7 +37,22 @@ def perform_backup(app_folder_path):
         print(f"⚠️  Failed to create backup: {e}")
 
 def clean_html_code(text):
-    """Cleans AI response to extract only the raw HTML/JS/CSS code."""
+    """Cleans an AI response down to raw HTML/JS/CSS.
+
+    Honors both contracts the active providers emit:
+      - The ---CODIGO---/---SUGERENCIA--- contract produced by the local/Ollama
+        providers via normalize_ai_output (the default, no-API-key path).
+      - Standard ``` / ```html fenced blocks (cloud providers).
+    Falls back to the raw text if neither marker is present.
+    """
+    if not text:
+        return text
+    # Local/Ollama contract (default offline, no-API-key path)
+    if "---CODIGO---" in text:
+        code = text.split("---CODIGO---", 1)[1]
+        if "---SUGERENCIA---" in code:
+            code = code.split("---SUGERENCIA---", 1)[0]
+        return code.strip()
     if "```html" in text:
         text = text.split("```html")[1].split("```")[0]
     elif "```" in text:
