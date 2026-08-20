@@ -142,6 +142,25 @@ def ask_ai(prompt, system_prompt):
             print(f"❌ Ollama error: {e}. Is Ollama running at localhost:11434? Try: `ollama serve`")
             return None
 
+def is_usable_code(code):
+    """True when `code` looks like a real app file worth writing to disk.
+
+    Guards the create path the same way is_usable_html guards the edit path:
+    an empty, whitespace-only, truncated, or prose-only model response must
+    never be written out as an app (and must never clobber an existing one).
+    """
+    if not code or not code.strip():
+        return False
+    stripped = code.strip()
+    if len(stripped) < 40:
+        return False
+    low = stripped.lower()
+    if "<html" in low or "<!doctype html" in low or "<body" in low:
+        return True
+    # Allow python app output too (Mode 1 can emit main.py)
+    return "def " in stripped or "import " in stripped
+
+
 def process_and_execute(ai_text, filename="generated_app.html"):
     """
     Handles output, saves files to project folders, manages server status.
@@ -155,12 +174,21 @@ def process_and_execute(ai_text, filename="generated_app.html"):
     project_name = filename.replace(".html", "").strip()
     project_path = os.path.join(base_folder, project_name)
 
-    if not os.path.exists(project_path):
-        os.makedirs(project_path)
-
     # 2. Parsing Response
     parts = ai_text.split("---SUGERENCIA---")
     code_block = parts[0].replace("---CODIGO---", "").strip()
+
+    # 2b. Failure recovery: don't create an empty project folder, and never
+    # overwrite an existing app, with an unusable response.
+    if not is_usable_code(code_block):
+        print(
+            "⚠️ The model did not return usable code "
+            f"({len(code_block or '')} chars). Nothing was saved."
+        )
+        return
+
+    if not os.path.exists(project_path):
+        os.makedirs(project_path)
 
     # 3. Determine file type
     if ".html" in filename or "html" in code_block[:200].lower():
