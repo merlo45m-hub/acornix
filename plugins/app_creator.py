@@ -51,6 +51,31 @@ def is_usable_html(code):
     return "<html" in low or "<!doctype html" in low or "<body" in low
 
 
+def keep_bak(file_path):
+    """Copy ``file_path`` to ``file_path + '.bak'`` before it is overwritten.
+
+    Failure recovery: the ZIP backup in perform_backup can be switched off in
+    config.json (backup_before_evolve) or fail on a full /storage, which left
+    the edit path with no last-known-good copy at all. This mirrors what the
+    create path already does, so a usable-but-worse regeneration is never the
+    only copy of a working app.
+
+    Returns True when a .bak exists afterwards.
+    """
+    if not os.path.exists(file_path):
+        return False
+    try:
+        with open(file_path, "r", encoding="utf-8") as old:
+            previous = old.read()
+        with open(file_path + ".bak", "w", encoding="utf-8") as bak:
+            bak.write(previous)
+        print(f"🗂️  Previous version backed up to {file_path}.bak")
+        return True
+    except OSError as e:
+        print(f"⚠️ Could not back up {file_path}: {e}")
+        return False
+
+
 def clean_html_code(text):
     """Cleans an AI response down to raw HTML/JS/CSS.
 
@@ -197,6 +222,9 @@ def run():
                         )
                         input("\nPress Enter to continue...")
                         continue
+                    # Keep a plain .bak of the last working version, even when
+                    # the ZIP backup is disabled or failed.
+                    keep_bak(target_file)
                     # Atomic write: a crash or a full disk mid-write can no
                     # longer truncate the working app the user is editing.
                     if not atomic_write_text(target_file, clean_code):
