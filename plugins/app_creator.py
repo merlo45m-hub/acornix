@@ -36,6 +36,20 @@ def perform_backup(app_folder_path):
     except Exception as e:
         print(f"⚠️  Failed to create backup: {e}")
 
+def is_usable_html(code):
+    """True when `code` looks like a real HTML document worth writing to disk.
+
+    Guards the edit path: an empty, whitespace-only, or prose-only model
+    response must never overwrite a working index.html.
+    """
+    if not code or not code.strip():
+        return False
+    low = code.lower()
+    if len(code.strip()) < 40:
+        return False
+    return "<html" in low or "<!doctype html" in low or "<body" in low
+
+
 def clean_html_code(text):
     """Cleans an AI response down to raw HTML/JS/CSS.
 
@@ -169,6 +183,19 @@ def run():
 
                 if new_code:
                     clean_code = clean_html_code(new_code)
+                    # Failure recovery: never destroy a working app with an
+                    # unusable model response. Small local models sometimes
+                    # answer with prose only, or the response is truncated by
+                    # the request timeout. Writing that out truncated
+                    # index.html to garbage (or to nothing at all).
+                    if not is_usable_html(clean_code):
+                        print(
+                            "\n⚠️ The model did not return usable HTML "
+                            f"({len(clean_code or '')} chars). "
+                            f"{app_name} was left unchanged."
+                        )
+                        input("\nPress Enter to continue...")
+                        continue
                     with open(target_file, "w", encoding="utf-8") as f:
                         f.write(clean_code)
                     print(f"\n✅ App successfully updated: {target_file}")
