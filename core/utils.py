@@ -211,8 +211,32 @@ def process_and_execute(ai_text, filename="generated_app.html"):
         except OSError as e:
             print(f"⚠️ Could not back up {file_path}: {e}")
 
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(code_block)
+    # Atomic write: build the new version beside the target, then swap it in.
+    # A crash / full disk mid-write can no longer leave a half-written app where
+    # a working one used to be. If the swap itself fails and we destroyed the
+    # original, restore it from the .bak we just took.
+    tmp_path = file_path + ".tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(code_block)
+        os.replace(tmp_path, file_path)
+    except OSError as e:
+        print(f"❌ Could not save {file_path}: {e}")
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            pass
+        if not os.path.exists(file_path) and os.path.exists(file_path + ".bak"):
+            try:
+                with open(file_path + ".bak", "r", encoding="utf-8") as bak:
+                    restored = bak.read()
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(restored)
+                print(f"♻️  Restored previous version from {file_path}.bak")
+            except OSError as restore_error:
+                print(f"⚠️ Restore from backup failed: {restore_error}")
+        return
     print(f"✅ Saved to {file_path}")
 
     # 5. Start server if needed
