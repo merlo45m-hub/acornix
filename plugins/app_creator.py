@@ -76,6 +76,50 @@ def keep_bak(file_path):
         return False
 
 
+def restore_bak(file_path):
+    """Restore ``file_path`` from ``file_path + '.bak'``.
+
+    Failure recovery, user-facing half: the edit path now always leaves a .bak
+    of the last working version, but until now the only way back was to dig
+    through the filesystem or unzip a backup archive. Restoring is written
+    atomically and the version being replaced is kept as the new .bak, so a
+    revert can itself be reverted (undo/redo of one step).
+
+    Returns True when the restore happened.
+    """
+    bak_path = file_path + ".bak"
+    if not os.path.exists(bak_path):
+        print(f"🚫 No previous version saved for {file_path}.")
+        return False
+    try:
+        with open(bak_path, "r", encoding="utf-8") as bak:
+            previous = bak.read()
+    except OSError as e:
+        print(f"⚠️ Could not read {bak_path}: {e}")
+        return False
+    if not is_usable_html(previous):
+        print(f"🚫 The saved previous version is not usable HTML — {file_path} left unchanged.")
+        return False
+    current = None
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                current = f.read()
+        except OSError:
+            current = None
+    if not atomic_write_text(file_path, previous):
+        print(f"⚠️ Restore failed — {file_path} left unchanged.")
+        return False
+    if current is not None:
+        try:
+            with open(bak_path, "w", encoding="utf-8") as bak:
+                bak.write(current)
+        except OSError as e:
+            print(f"⚠️ Restored, but could not refresh {bak_path}: {e}")
+    print(f"♻️  Restored previous version of {file_path}")
+    return True
+
+
 def clean_html_code(text):
     """Cleans an AI response down to raw HTML/JS/CSS.
 
@@ -107,6 +151,7 @@ def run():
         print("=== 🏗️ WEB APP CREATOR & EDITOR ===")
         print("1) ✨ Create New Web App")
         print("2) 🛠️ Improve/Fix Existing App")
+        print("3) ♻️  Revert App to Last Working Version")
         print("0) 🔙 Back")
 
         opt = input("\nSelect an option: ").strip()
@@ -233,3 +278,35 @@ def run():
                         continue
                     print(f"\n✅ App successfully updated: {target_file}")
                     input("\nPress Enter to continue...")
+
+        # --- MODE 3: REVERT ---
+        elif opt == "3":
+            apps_dir = "my_apps"
+            if not os.path.exists(apps_dir):
+                print(f"\n🚫 Base directory '{apps_dir}' does not exist.")
+                input("Press Enter...")
+                continue
+
+            apps = sorted([
+                d for d in os.listdir(apps_dir)
+                if os.path.isdir(os.path.join(apps_dir, d))
+                and os.path.exists(os.path.join(apps_dir, d, "index.html.bak"))
+            ])
+            if not apps:
+                print("\n🚫 No app has a saved previous version to revert to.")
+                input("Press Enter...")
+                continue
+
+            print("\n--- SELECT APP TO REVERT ---")
+            for i, app in enumerate(apps, 1):
+                print(f"{i}) {app}")
+            print("0) Cancel")
+
+            choice = input("\nSelection number: ")
+            if choice == "0" or not choice.isdigit():
+                continue
+            idx = int(choice) - 1
+            if 0 <= idx < len(apps):
+                target_file = os.path.join(apps_dir, apps[idx], "index.html")
+                restore_bak(target_file)
+                input("\nPress Enter to continue...")
