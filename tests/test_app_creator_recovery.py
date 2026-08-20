@@ -41,4 +41,12 @@ for name, code, want in guard:
         fails.append(("guard:" + name, got))
 
 print("FAILURES:", fails if fails else "none")
-sys.exit(1 if fails else 0)
+
+
+def test_app_creator_recovery():
+    """pytest entrypoint — assert instead of sys.exit so collection works."""
+    assert not fails, fails
+
+
+if __name__ == "__main__":
+    sys.exit(1 if fails else 0)
