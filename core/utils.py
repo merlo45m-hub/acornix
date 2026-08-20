@@ -90,7 +90,7 @@ def ask_ai(prompt, system_prompt):
         }
         try:
             res = requests.post(url, headers=headers, json=data, timeout=120).json()
-            return res['choices'][0]['message']['content']
+            return normalize_ai_output(res['choices'][0]['message']['content'])
         except Exception as e:
             print(f"❌ OpenAI API Error: {e}")
             return None
@@ -111,7 +111,7 @@ def ask_ai(prompt, system_prompt):
         }
         try:
             res = requests.post(url, headers=headers, json=data, timeout=120).json()
-            return res['content'][0]['text']
+            return normalize_ai_output(res['content'][0]['text'])
         except Exception as e:
             print(f"❌ Anthropic API Error: {e}")
             return None
@@ -198,7 +198,19 @@ def process_and_execute(ai_text, filename="generated_app.html"):
     else:
         file_path = os.path.join(project_path, "index.html")
 
-    # 4. Save the file
+    # 4. Save the file. Failure recovery: keep one backup of the previous
+    # version so a usable-but-worse regeneration is never the last copy of a
+    # working app.
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8") as old:
+                previous = old.read()
+            with open(file_path + ".bak", "w", encoding="utf-8") as bak:
+                bak.write(previous)
+            print(f"🗂️  Previous version backed up to {file_path}.bak")
+        except OSError as e:
+            print(f"⚠️ Could not back up {file_path}: {e}")
+
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(code_block)
     print(f"✅ Saved to {file_path}")
