@@ -7,6 +7,7 @@ import socket
 import time
 from dotenv import load_dotenv
 from core.local_ai import ask_local
+from core.atomic import atomic_write_text
 
 # API Configuration
 load_dotenv()
@@ -216,12 +217,7 @@ def process_and_execute(ai_text, filename="generated_app.html"):
     # a working one used to be. If the swap itself fails and we destroyed the
     # original, restore it from the .bak we just took.
     tmp_path = file_path + ".tmp"
-    try:
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            f.write(code_block)
-        os.replace(tmp_path, file_path)
-    except OSError as e:
-        print(f"❌ Could not save {file_path}: {e}")
+    if not atomic_write_text(file_path, code_block):
         try:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)

@@ -3,6 +3,7 @@ import shutil
 import datetime
 import json
 from core.utils import ask_ai, process_and_execute
+from core.atomic import atomic_write_text
 
 # Plugin Configuration
 config = {"label": "App Creator & Editor", "icon": "🏗️"}
@@ -196,7 +197,11 @@ def run():
                         )
                         input("\nPress Enter to continue...")
                         continue
-                    with open(target_file, "w", encoding="utf-8") as f:
-                        f.write(clean_code)
+                    # Atomic write: a crash or a full disk mid-write can no
+                    # longer truncate the working app the user is editing.
+                    if not atomic_write_text(target_file, clean_code):
+                        print(f"\n⚠️ {app_name} was left unchanged.")
+                        input("\nPress Enter to continue...")
+                        continue
                     print(f"\n✅ App successfully updated: {target_file}")
                     input("\nPress Enter to continue...")
