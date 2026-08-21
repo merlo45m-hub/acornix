@@ -179,6 +179,17 @@ def process_and_execute(ai_text, filename="generated_app.html"):
     parts = ai_text.split("---SUGERENCIA---")
     code_block = parts[0].replace("---CODIGO---", "").strip()
 
+    # 2a. First-try hygiene: small local models sometimes wrap the code in a
+    # ```html fence even inside the ---CODIGO--- contract. The Mode 2 edit path
+    # strips fences via clean_html_code, but this create path writes
+    # code_block verbatim, which would leave stray backticks in the app the
+    # user opens. Strip a single wrapping fence so the saved file is real HTML.
+    if code_block.startswith("```"):
+        code_block = code_block.split("\n", 1)[1] if "\n" in code_block else ""
+    if code_block.endswith("```"):
+        code_block = code_block[:-3].rstrip()
+    code_block = code_block.strip()
+
     # 2b. Failure recovery: don't create an empty project folder, and never
     # overwrite an existing app, with an unusable response.
     if not is_usable_code(code_block):
