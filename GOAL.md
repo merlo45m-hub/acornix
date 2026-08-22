@@ -42,6 +42,23 @@ The generator can no longer destroy a working app:
   rendered on the page. Tests: `tests/test_first_try_prose_trim.py`.
 - Still open before the outcome is met: a real end-to-end Mode 1 run against
   Ollama `qwen2.5-coder:1.5b` on device, opening the produced file.
+- 2026-08-22 **Attempted that run — BLOCKED on device decode speed, not on code.**
+  Measured, not estimated:
+  - Mode 1 via `ask_ai()` (real plugin prompt) failed: Ollama read timeout at
+    120s, `ask_ai` returned None, nothing written. The failure-recovery guard
+    behaved correctly (no partial/clobbered app).
+  - Same prompt straight to `/api/chat` with a 580s budget: still no response.
+  - Control (`"Say OK"`, `num_predict:64`): 17 tokens in 86.4s —
+    `load_duration` 0.47s, `eval_duration` 81.7s → **≈0.21 tok/s decode**.
+    A ~1500-token SPA is therefore hours, not the <60s success criterion.
+  - Context: host up 2 min, 8.5GB/11GB used, ~200MB free → memory pressure is
+    the leading suspect (decode-bound, not model-load-bound).
+  - Next step for this outcome (in order): (1) re-measure tok/s on an unloaded
+    device to confirm memory pressure is the cause; (2) if decode stays <5 tok/s,
+    the default provider cannot meet the outcome — either drop to a smaller
+    model (qwen2.5-coder:0.5b) or make the phone default a cloud provider and
+    keep Ollama as the offline path; (3) raise the Ollama client timeout above
+    120s so a slow-but-successful generation is not thrown away.
 
 ## AI Backend (verified)
 `ask_ai()` supports `openai`, `anthropic`, `ollama`, `local`.
