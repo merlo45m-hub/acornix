@@ -41,6 +41,27 @@ def normalize_ai_output(text):
         return f"---CODIGO---\n{code}\n---SUGERENCIA---\n{suggestion}"
     return f"---CODIGO---\n{text}\n---SUGERENCIA---"
 
+OLLAMA_DEFAULT_TIMEOUT = 900
+
+
+def ollama_timeout():
+    """Read timeout (seconds) for the local Ollama call.
+
+    Measured on-device decode for qwen2.5-coder:1.5b is well under 1 tok/s on a
+    memory-pressured phone, so the old hard-coded 120s threw away generations
+    that would have succeeded. Default is generous; override with
+    ACORNIX_OLLAMA_TIMEOUT (seconds, must be a positive number).
+    """
+    raw = os.getenv("ACORNIX_OLLAMA_TIMEOUT")
+    if not raw:
+        return OLLAMA_DEFAULT_TIMEOUT
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return OLLAMA_DEFAULT_TIMEOUT
+    return value if value > 0 else OLLAMA_DEFAULT_TIMEOUT
+
+
 def ask_ai(prompt, system_prompt):
     """
     Sends prompt to configured provider and returns response.
@@ -137,7 +158,8 @@ def ask_ai(prompt, system_prompt):
             ]
         }
         try:
-            res = requests.post(url, headers=headers, json=data, timeout=120).json()
+            res = requests.post(url, headers=headers, json=data,
+                                timeout=ollama_timeout()).json()
             return normalize_ai_output(res["choices"][0]["message"]["content"])
         except Exception as e:
             print(f"❌ Ollama error: {e}. Is Ollama running at localhost:11434? Try: `ollama serve`")

@@ -11,7 +11,19 @@ running Mode 1 end-to-end against the default local model and opening the file.
 
 Not on the roadmap right now: marketplace, fine-tuning, extra plugins.
 
-### Progress on this outcome (43 tests green)
+### Progress on this outcome (47 tests green)
+- 2026-08-22 (re-measure, step 1 of the plan below): control run on a
+  freshly-booted device (up 2 min, 3.2GB available, 8GB swap in use) gave
+  **0.35 tok/s** decode (3 tokens / 8.6s eval, 14.6s load). Memory pressure is
+  *not* the whole story — decode is slow on an idle device too, so the local
+  1.5b default cannot meet the <60s criterion. Step 2 (change the phone default
+  provider, or ship a smaller model) is now the blocking product decision.
+- 2026-08-22 (step 3 shipped): the Ollama read timeout is no longer a
+  hard-coded 120s. `core.utils.ollama_timeout()` defaults to 900s and is
+  overridable with `ACORNIX_OLLAMA_TIMEOUT`, so a slow-but-successful
+  generation is kept instead of discarded. Tests:
+  `tests/test_ollama_timeout.py` (4 tests, incl. one asserting the ollama
+  branch actually passes the helper's value).
 - Mode 1 refuses unusable output, strips markdown fences, and trims chat prose
   around the HTML document.
 - 2026-08-22: when the model ignores the `---CODIGO---` contract entirely but
