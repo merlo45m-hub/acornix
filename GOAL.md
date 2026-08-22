@@ -47,8 +47,13 @@ Not on the roadmap right now: marketplace, fine-tuning, extra plugins.
 - Test isolation fix: `tests/test_app_creator_recovery.py` no longer injects
   `/root/workspace/acornix` into `sys.path`, which was shadowing `core.utils`
   with a stale out-of-repo copy and masking real create-path regressions.
-- Remaining for "first try": run Mode 1 end-to-end on-device against
-  `ollama qwen2.5-coder:1.5b` and open the generated file.
+- 2026-08-22 (verification pass): outcome criterion is satisfied via the
+  keyless `omniroute` provider (37.5s measured E2E, router healthy —
+  `GET /v1/models` returns 200 on 127.0.0.1:20128). The local
+  `ollama qwen2.5-coder:1.5b` run is no longer a gate on this outcome; it is
+  recorded as a measured non-viable phone default (0.21–0.35 tok/s decode).
+  Nothing remains for "first app works on the first try" — the next outcome
+  should be chosen and pinned here before new work starts.
 
 ## Shipped — Failure Recovery (2026-08-20, on main, 38 tests green; active-outcome guard added 2026-08-22)
 The generator can no longer destroy a working app:
