@@ -62,6 +62,32 @@ def ollama_timeout():
     return value if value > 0 else OLLAMA_DEFAULT_TIMEOUT
 
 
+OMNIROUTE_DEFAULT_BASE_URL = "http://127.0.0.1:20128/v1"
+OMNIROUTE_DEFAULT_MODEL = "auto/best-coding"
+OMNIROUTE_DEFAULT_TIMEOUT = 300
+
+
+def omniroute_base_url():
+    """Base URL of the local OmniRoute OpenAI-compatible router.
+
+    OmniRoute runs on the phone and needs no API key, so it keeps the
+    "no key needed" promise while replacing sub-1-tok/s local decode.
+    Override with ACORNIX_OMNIROUTE_URL.
+    """
+    return (os.getenv("ACORNIX_OMNIROUTE_URL") or OMNIROUTE_DEFAULT_BASE_URL).rstrip("/")
+
+
+def omniroute_timeout():
+    raw = os.getenv("ACORNIX_OMNIROUTE_TIMEOUT")
+    if not raw:
+        return OMNIROUTE_DEFAULT_TIMEOUT
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return OMNIROUTE_DEFAULT_TIMEOUT
+    return value if value > 0 else OMNIROUTE_DEFAULT_TIMEOUT
+
+
 def ask_ai(prompt, system_prompt):
     """
     Sends prompt to configured provider and returns response.
@@ -79,7 +105,9 @@ def ask_ai(prompt, system_prompt):
     model = settings.get("models", {}).get(provider)
 
     # Local/Ollama providers don't need API keys
-    no_key_needed = provider in ("local", "ollama")
+    no_key_needed = provider in ("local", "ollama", "omniroute")
+    if provider == "omniroute":
+        model = model or OMNIROUTE_DEFAULT_MODEL
 
     # --- FAILURE RECOVERY ---
     # Mission promise: build apps with NO API key. If a cloud provider was
@@ -136,6 +164,27 @@ def ask_ai(prompt, system_prompt):
             return normalize_ai_output(res['content'][0]['text'])
         except Exception as e:
             print(f"❌ Anthropic API Error: {e}")
+            return None
+
+    # --- OmniRoute Provider (on-device OpenAI-compatible router, no key) ---
+    elif provider == "omniroute":
+        url = f"{omniroute_base_url()}/chat/completions"
+        data = {
+            "model": model,
+            "stream": False,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ]
+        }
+        try:
+            res = requests.post(url, headers={"Content-Type": "application/json"},
+                                json=data, timeout=omniroute_timeout()).json()
+            content = res["choices"][0]["message"]["content"]
+            return normalize_ai_output(content)
+        except Exception as e:
+            print(f"❌ OmniRoute error: {e}. Is OmniRoute running at "
+                  f"{omniroute_base_url()}? Falling back is up to the caller.")
             return None
 
     # --- Local Provider (HuggingFace, offline) ---

@@ -11,7 +11,21 @@ running Mode 1 end-to-end against the default local model and opening the file.
 
 Not on the roadmap right now: marketplace, fine-tuning, extra plugins.
 
-### Progress on this outcome (47 tests green)
+### Progress on this outcome (52 tests green)
+- 2026-08-22 **OUTCOME MET on device — step 2 (the blocking product decision) is
+  shipped.** The phone default no longer has to be a sub-1-tok/s local 1.5b.
+  New keyless provider `omniroute` in `core.utils.ask_ai()` talks to the
+  on-device OmniRoute OpenAI-compatible router (`http://127.0.0.1:20128/v1`,
+  no API key, `stream: False`, override with `ACORNIX_OMNIROUTE_URL` /
+  `ACORNIX_OMNIROUTE_TIMEOUT`). Measured end-to-end Mode 1 run, real plugin
+  system prompt, prompt "tip calculator with slider + split by people":
+  **37.5s wall clock**, 2008-char response, `is_usable_code` True, written to
+  `my_apps/tipcalc_e2e/index.html`, served over HTTP 200 (1242 bytes), parses,
+  ends in `</html>`, contains the range slider and the split logic. Under the
+  <60s criterion, on the phone, with no API key and nothing hand-edited.
+  Tests: `tests/test_omniroute_provider.py` (5 tests — keyless guard is not
+  hijacked by the cloud-fallback path, streaming stays off, configured model
+  wins, transport failure returns None rather than garbage).
 - 2026-08-22 (re-measure, step 1 of the plan below): control run on a
   freshly-booted device (up 2 min, 3.2GB available, 8GB swap in use) gave
   **0.35 tok/s** decode (3 tokens / 8.6s eval, 14.6s load). Memory pressure is
