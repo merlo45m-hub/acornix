@@ -11,7 +11,7 @@ running Mode 1 end-to-end against the default local model and opening the file.
 
 Not on the roadmap right now: marketplace, fine-tuning, extra plugins.
 
-## Shipped — Failure Recovery (2026-08-20, on main, 30 tests green; active-outcome guard added 2026-08-22)
+## Shipped — Failure Recovery (2026-08-20, on main, 38 tests green; active-outcome guard added 2026-08-22)
 The generator can no longer destroy a working app:
 - Mode 1 (create) refuses to write unusable model output.
 - All app writes are atomic (tmp + replace) — a crash can't truncate a file.
@@ -20,6 +20,15 @@ The generator can no longer destroy a working app:
 - Mode 3 `♻️ Revert App to Last Working Version` restores from `.bak`, and the
   replaced version becomes the new `.bak` (one-step undo/redo).
 - Test suite: `tests/test_*_recovery.py`, `tests/test_edit_path_*.py`.
+
+## Progress toward the active outcome
+- 2026-08-21 Mode 1 strips a wrapping markdown fence before writing.
+- 2026-08-22 Mode 1 trims chat prose around the HTML document
+  (`trim_to_html_document`), so the saved `index.html` starts at `<!DOCTYPE
+  html>` instead of "Sure! Here's your app:" — no quirks mode, no chatter
+  rendered on the page. Tests: `tests/test_first_try_prose_trim.py`.
+- Still open before the outcome is met: a real end-to-end Mode 1 run against
+  Ollama `qwen2.5-coder:1.5b` on device, opening the produced file.
 
 ## AI Backend (verified)
 `ask_ai()` supports `openai`, `anthropic`, `ollama`, `local`.

@@ -162,6 +162,30 @@ def is_usable_code(code):
     return "def " in stripped or "import " in stripped
 
 
+def trim_to_html_document(code):
+    """Trim chat prose from around an HTML document.
+
+    Returns ``code`` unchanged when it does not look like an HTML document, so
+    Python/other generations are never touched. When a document start marker
+    (``<!doctype html`` or ``<html``) is present, everything before it is
+    dropped; when a closing ``</html>`` is present, everything after it is
+    dropped. Idempotent: clean HTML in, identical HTML out.
+    """
+    if not code or not code.strip():
+        return code
+    low = code.lower()
+    start = -1
+    for marker in ("<!doctype html", "<html"):
+        pos = low.find(marker)
+        if pos != -1 and (start == -1 or pos < start):
+            start = pos
+    if start == -1:
+        return code
+    end = low.rfind("</html>")
+    trimmed = code[start:end + len("</html>")] if end != -1 else code[start:]
+    return trimmed.strip()
+
+
 def process_and_execute(ai_text, filename="generated_app.html"):
     """
     Handles output, saves files to project folders, manages server status.
@@ -189,6 +213,13 @@ def process_and_execute(ai_text, filename="generated_app.html"):
     if code_block.endswith("```"):
         code_block = code_block[:-3].rstrip()
     code_block = code_block.strip()
+
+    # 2a-bis. First-try hygiene: small local models often top-and-tail the code
+    # with chat prose ("Sure! Here's your app:" / "Hope this helps!") and no
+    # fence at all. Written verbatim that prose lands *before* <!DOCTYPE html>,
+    # which forces quirks mode and renders the chatter on the page — the app
+    # does not "work on the first try". Trim to the HTML document boundaries.
+    code_block = trim_to_html_document(code_block)
 
     # 2b. Failure recovery: don't create an empty project folder, and never
     # overwrite an existing app, with an unusable response.
