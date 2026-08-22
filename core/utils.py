@@ -190,9 +190,25 @@ def process_and_execute(ai_text, filename="generated_app.html"):
     """
     Handles output, saves files to project folders, manages server status.
     """
-    if not ai_text or "---CODIGO---" not in ai_text:
+    if not ai_text or not ai_text.strip():
         print("⚠️ No valid code block found in AI response.")
         return
+
+    # 0. First-try recovery: small local models frequently ignore the
+    # ---CODIGO--- contract entirely and just answer with the app itself.
+    # Rejecting that response meant the user got *nothing* on the first try
+    # even though a perfectly good HTML document was in hand. If the marker is
+    # missing but the response contains an HTML document, treat the document as
+    # the code block instead of throwing the generation away.
+    if "---CODIGO---" not in ai_text:
+        low = ai_text.lower()
+        has_document = "<!doctype html" in low or "<html" in low
+        salvaged = trim_to_html_document(ai_text) if has_document else ""
+        if not has_document or not is_usable_code(salvaged):
+            print("⚠️ No valid code block found in AI response.")
+            return
+        print("ℹ️ Model skipped the ---CODIGO--- marker; recovered the HTML document.")
+        ai_text = "---CODIGO---\n" + salvaged
 
     # 1. Path Configuration
     base_folder = "my_apps"

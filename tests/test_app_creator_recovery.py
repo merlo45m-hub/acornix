@@ -1,6 +1,11 @@
-import importlib.util, sys
-sys.path.insert(0, '/root/workspace/acornix')
-spec = importlib.util.spec_from_file_location("ac", "/root/workspace/acornix/plugins/app_creator.py")
+import importlib.util, os, sys
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if REPO not in sys.path:
+    sys.path.insert(0, REPO)
+spec = importlib.util.spec_from_file_location(
+    "ac", os.path.join(REPO, "plugins", "app_creator.py")
+)
 m = importlib.util.module_from_spec(spec)
 try:
     spec.loader.exec_module(m)

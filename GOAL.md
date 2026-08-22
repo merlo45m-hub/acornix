@@ -11,6 +11,19 @@ running Mode 1 end-to-end against the default local model and opening the file.
 
 Not on the roadmap right now: marketplace, fine-tuning, extra plugins.
 
+### Progress on this outcome (43 tests green)
+- Mode 1 refuses unusable output, strips markdown fences, and trims chat prose
+  around the HTML document.
+- 2026-08-22: when the model ignores the `---CODIGO---` contract entirely but
+  did return an HTML document, the create path now recovers the document
+  instead of discarding the whole generation (`tests/test_missing_marker_recovery.py`).
+  Prose-only and empty responses are still rejected.
+- Test isolation fix: `tests/test_app_creator_recovery.py` no longer injects
+  `/root/workspace/acornix` into `sys.path`, which was shadowing `core.utils`
+  with a stale out-of-repo copy and masking real create-path regressions.
+- Remaining for "first try": run Mode 1 end-to-end on-device against
+  `ollama qwen2.5-coder:1.5b` and open the generated file.
+
 ## Shipped — Failure Recovery (2026-08-20, on main, 38 tests green; active-outcome guard added 2026-08-22)
 The generator can no longer destroy a working app:
 - Mode 1 (create) refuses to write unusable model output.
