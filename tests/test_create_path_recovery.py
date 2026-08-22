@@ -71,3 +71,21 @@ def test_usable_response_is_written():
     exists, content = _run_in_tmp("---CODIGO---\n" + DOC + "\n---SUGERENCIA---\nadd laps", "sw2")
     assert exists is True
     assert content is not None and "Stopwatch" in content
+
+
+def test_fenced_contract_is_stripped_on_first_try():
+    """Active outcome: 'First app works on the first try.'
+
+    Small local models wrap the generated code in a ```html fence even inside
+    the ---CODIGO--- contract. The Mode 1 create path (process_and_execute)
+    must strip that single wrapping fence so the file the user opens is real
+    HTML, not backticks. Regression guard for commit 0ff2586b.
+    """
+    fenced = "---CODIGO---\n```html\n" + DOC + "\n```\n---SUGERENCIA---\nadd laps"
+    exists, content = _run_in_tmp(fenced, "fencewire")
+    assert exists is True, "a fenced-but-usable response must still create the app"
+    assert content is not None
+    assert content.startswith(
+        "<!DOCTYPE html>"
+    ), "a stray opening fence must not reach the saved file"
+    assert "```" not in content, "no markdown fence may remain in the saved app"
