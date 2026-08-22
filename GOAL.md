@@ -11,7 +11,7 @@ running Mode 1 end-to-end against the default local model and opening the file.
 
 Not on the roadmap right now: marketplace, fine-tuning, extra plugins.
 
-## Shipped — Failure Recovery (2026-08-20, on main, 29 tests green)
+## Shipped — Failure Recovery (2026-08-20, on main, 30 tests green; active-outcome guard added 2026-08-22)
 The generator can no longer destroy a working app:
 - Mode 1 (create) refuses to write unusable model output.
 - All app writes are atomic (tmp + replace) — a crash can't truncate a file.
