@@ -36,7 +36,7 @@ Open Termux and make sure everything is updated before starting:
 Run this command in Termux to set up everything automatically (dependencies, permissions, and alias):
 
 ```bash
-pkg update && pkg upgrade -y && pkg install python git termux-api binutils -y && termux-setup-storage && git clone https://github.com/gonzaroman/acornix.git && cd acornix && pip install requests python-dotenv psutil && echo "alias acornix='cd ~/acornix && python main.py'" >> ~/.bashrc && source ~/.bashrc && python main.py
+pkg update && pkg upgrade -y && pkg install python git termux-api binutils -y && termux-setup-storage && git clone https://github.com/merlo45m-hub/acornix.git && cd acornix && pip install requests python-dotenv psutil && echo "alias acornix='cd ~/acornix && python main.py'" >> ~/.bashrc && source ~/.bashrc && python main.py
 
 ```
 
